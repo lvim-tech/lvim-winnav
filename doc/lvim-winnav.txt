@@ -1,0 +1,320 @@
+*lvim-winnav.txt*     Directional window navigation, resizing, multiplexer handoff
+
+==============================================================================
+CONTENTS                                                  *lvim-winnav-contents*
+
+    1. Introduction .......................... |lvim-winnav-introduction|
+    2. The two halves ........................ |lvim-winnav-halves|
+    3. Setup ................................. |lvim-winnav-setup|
+    4. Configuration ......................... |lvim-winnav-configuration|
+    5. Commands .............................. |lvim-winnav-commands|
+    6. API ................................... |lvim-winnav-api|
+    7. Edge behaviour ........................ |lvim-winnav-at-edge|
+    8. Resizing .............................. |lvim-winnav-resize|
+    9. Resize mode ........................... |lvim-winnav-resize-mode|
+   10. The tmux side ......................... |lvim-winnav-tmux|
+   11. Backends ............................. |lvim-winnav-backends|
+   12. Health ............................... |lvim-winnav-health|
+
+==============================================================================
+1. INTRODUCTION                                       *lvim-winnav-introduction*
+
+lvim-winnav is ONE set of keys that moves the cursor and resizes splits — and,
+at the edge of the Neovim layout, hands off to the terminal MULTIPLEXER, so the
+same <C-h/j/k/l> walks straight into the tmux pane next door and back.
+
+It owns directional NAVIGATION, RESIZING and the multiplexer HANDOFF.
+lvim-winpick picks a window by label; lvim-winmove rearranges windows — a
+directional swap here delegates the exchange to lvim-winmove.
+
+==============================================================================
+2. THE TWO HALVES                                           *lvim-winnav-halves*
+
+The handoff has two halves, and the plugin ships both:
+
+  • Neovim's half — at an edge, tell the multiplexer to select (or resize) the
+    pane in that direction.
+  • The multiplexer's half — a key pressed while the pane runs Neovim must be
+    FORWARDED to it instead of moving the pane. `:LvimWinNav mux-config` prints
+    that config; `lvim-winnav.tmux` (a script at the repo root) installs it.
+
+The tmux half tests a PANE MARK, not a process guess: while Neovim runs it sets
+the pane-scoped option `@lvim_nvim`, so the binding evaluates
+`#{==:#{@lvim_nvim},1}` — a variable lookup inside tmux, with no shell fork per
+keypress and no wrong answer under a wrapper, sudo, ssh or a renamed binary.
+
+Existing process-check bindings keep working: nothing here requires the
+plugin's own tmux half for the Neovim-internal moves.
+
+==============================================================================
+3. SETUP                                                     *lvim-winnav-setup*
+
+>lua
+    require("lvim-winnav").setup({})
+<
+The plugin binds no keys — your keymaps call the API: >lua
+
+    local winnav = require("lvim-winnav")
+    vim.keymap.set("n", "<C-h>", function() winnav.move("left") end)
+    vim.keymap.set("n", "<C-j>", function() winnav.move("down") end)
+    vim.keymap.set("n", "<C-k>", function() winnav.move("up") end)
+    vim.keymap.set("n", "<C-l>", function() winnav.move("right") end)
+    vim.keymap.set("n", "<C-Left>", function() winnav.resize("left") end)
+    vim.keymap.set("n", "<C-Down>", function() winnav.resize("down") end)
+    vim.keymap.set("n", "<C-Up>", function() winnav.resize("up") end)
+    vim.keymap.set("n", "<C-Right>", function() winnav.resize("right") end)
+<
+Whichever keys you choose, declare them in `multiplexer.keys` — the generated
+multiplexer config binds exactly those on the other side.
+
+Calling setup() is what installs the PANE MARK (the tmux side's variable).
+
+==============================================================================
+4. CONFIGURATION                                     *lvim-winnav-configuration*
+
+The full option set, at its defaults (see also `lua/lvim-winnav/config.lua`,
+the live config): >lua
+
+    require("lvim-winnav").setup({
+        at_edge = "multiplexer",       -- or a per-direction table
+        default_amount = 3,            -- cells, or a percentage string ("5%")
+        move_cursor_with_buffer = false,
+        disable_multiplexer_nav_when_zoomed = true,
+
+        multiplexer = {
+            backend = "auto",          -- auto|tmux|wezterm|kitty|zellij|false
+            mark_pane = true,
+            pane_option = "@lvim_nvim",
+            no_wrap = true,
+            timeout = 1000,
+            commands = {
+                tmux = "tmux",
+                wezterm = "wezterm",
+                kitty = "kitty",
+                zellij = "zellij",
+            },
+            keys = {
+                move = { left = "C-h", down = "C-j", up = "C-k", right = "C-l" },
+                resize = {
+                    left = "C-Left",
+                    down = "C-Down",
+                    up = "C-Up",
+                    right = "C-Right",
+                },
+            },
+        },
+
+        dock = { enabled = true },
+
+        resize_mode = {
+            keys = {
+                left = "h",
+                down = "j",
+                up = "k",
+                right = "l",
+                quit = { "<Esc>", "q" },
+            },
+            hooks = { on_enter = nil, on_leave = nil },
+            show_footer = true,
+            title = "RESIZE",
+            labels = {
+                left = "left",
+                down = "down",
+                up = "up",
+                right = "right",
+                quit = "quit",
+            },
+            size_format = "%d x %d",
+        },
+
+        ignored_filetypes = {},
+        ignored_buftypes = {},
+
+        icons = { mode = "󰩨", separator = "➤", mux = "󰆍" },
+
+        colors = {
+            hint_key = { accent = "blue", tint = "badge" },
+            hint_label = { accent = "yellow", tint = "label" },
+            hint_size = { accent = "green", tint = "strong" },
+            hint_sep = { accent = "red", tint = "deep" },
+            hint_fill = { accent = "yellow", tint = "bar_fill" },
+        },
+    })
+<
+Colours are palette KEYS (never a hex) and tints are ROLE names in the shared
+`lvim-utils.config.ui` scale, so the chrome tracks the live theme.
+
+==============================================================================
+5. COMMANDS                                               *lvim-winnav-commands*
+
+                                                                  *:LvimWinNav*
+:LvimWinNav left|down|up|right
+    Move the cursor to the window that way; at the edge, run the configured
+    `at_edge` behaviour.
+
+:LvimWinNav resize {dir} [{amount}]
+    Move the boundary in {dir}. {amount} is a number of cells or a percentage
+    string ("10%"); omitted, `default_amount` is used.
+
+:LvimWinNav swap {dir}
+    Swap the current buffer with the window in {dir} (through lvim-winmove).
+
+:LvimWinNav resize-mode
+    Enter the interactive resize mode.
+
+:LvimWinNav mux-config
+    Show the ready-to-paste config for the DETECTED multiplexer in a read-only
+    viewer; `y` copies it to the clipboard, `q` closes.
+
+==============================================================================
+6. API                                                         *lvim-winnav-api*
+
+                                                        *lvim-winnav.move()*
+require("lvim-winnav").move({dir})
+    Move the cursor to the window in {dir} ("left"|"down"|"up"|"right"). At the
+    edge, run the `at_edge` behaviour. Returns whether anything happened.
+
+                                                      *lvim-winnav.resize()*
+require("lvim-winnav").resize({dir}, {amount})
+    Move the boundary in {dir}; {amount} (optional) overrides `default_amount`.
+
+                                                        *lvim-winnav.swap()*
+require("lvim-winnav").swap({dir})
+    Swap the current buffer with the one in {dir}. Needs lvim-winmove.
+
+                                                 *lvim-winnav.resize_mode()*
+require("lvim-winnav").resize_mode()
+require("lvim-winnav").end_resize_mode()
+    Enter / leave the interactive resize mode.
+
+                                                *lvim-winnav.multiplexer()*
+require("lvim-winnav").multiplexer()
+    The detected multiplexer's name, or nil.
+
+                                                 *lvim-winnav.mux_config()*
+require("lvim-winnav").mux_config()
+    The generated multiplexer config block, as lines (nil when none).
+
+==============================================================================
+7. EDGE BEHAVIOUR                                          *lvim-winnav-at-edge*
+
+`at_edge` decides what a move does when there is no Neovim window that way. It
+is one value for every direction, or a table per direction: >lua
+
+    at_edge = {
+        left = "multiplexer",
+        right = "multiplexer",
+        up = "multiplexer",
+        down = "dock",
+    }
+<
+    multiplexer   Select the pane that way (no multiplexer ⇒ nothing happens).
+    wrap          Wrap around to the window at the opposite edge.
+    split         Open a new split that way.
+    dock          Focus the docked lvim panel that way (the message zone).
+    stop          Do nothing.
+
+THE DOCK IS ASKED FIRST. When `dock.enabled` (the default), a docked lvim panel
+in that direction is focused before any edge behaviour runs — a panel below the
+editor is still inside Neovim, so leaving for a tmux pane while the message zone
+sits right there is never what was meant. When there is nothing to descend into,
+the configured behaviour runs as usual.
+
+A ZOOMED multiplexer pane never hands off while
+`disable_multiplexer_nav_when_zoomed` is set (and tmux itself reports a zoomed
+pane as being at every edge, so it stays put in any case).
+
+==============================================================================
+8. RESIZING                                                 *lvim-winnav-resize*
+
+One invariant: THE BOUNDARY IN THE PRESSED DIRECTION MOVES IN THAT DIRECTION.
+
+    With `A│B` and the cursor in A, `resize left` moves the shared boundary
+    left — A shrinks. With the cursor in B, the same key moves the same
+    boundary left — B grows.
+
+At the outermost edge of the layout there is no Neovim boundary that way, so the
+boundary in that direction belongs to the MULTIPLEXER: the key resizes the pane
+(when `at_edge` for that direction is "multiplexer").
+
+Percentages are measured against the PARENT container (the enclosing row/column
+of the window layout), not the screen — so "10%" is the same visual step at any
+nesting depth and any terminal size.
+
+Windows listed in `ignored_filetypes` / `ignored_buftypes`, floats, and windows
+with 'winfixwidth' / 'winfixheight' are never resized.
+
+==============================================================================
+9. RESIZE MODE                                         *lvim-winnav-resize-mode*
+
+`:LvimWinNav resize-mode` (or `require("lvim-winnav").resize_mode()`) enters a
+modal loop: the configured plain keys (h/j/k/l) resize the CURRENT window until
+a quit key (<Esc> / q). No keymaps are installed — nothing can be left behind.
+
+While it is active, a non-focusable hint bar sits above the statusline showing
+the live keys and the window's size, themed from the palette
+(`resize_mode.show_footer = false` turns it off). `resize_mode.hooks.on_enter` /
+`on_leave` fire around the mode.
+
+==============================================================================
+10. THE TMUX SIDE                                             *lvim-winnav-tmux*
+
+`lvim-winnav.tmux` (at the repo root) is a POSIX shell script tmux runs on
+start: >tmux
+
+    set -g @plugin 'lvim-tech/lvim-winnav'
+<
+It installs the root-table bindings that FORWARD the keys into Neovim when the
+pane is marked, and move / resize the pane when it is not. Every binding is
+`-n` (root table): none of them uses, or can collide with, your prefix key.
+
+Options (set them before the tpm `run` line):
+
+    @lvim-winnav_move_left_key      C-h
+    @lvim-winnav_move_down_key      C-j
+    @lvim-winnav_move_up_key        C-k
+    @lvim-winnav_move_right_key     C-l
+    @lvim-winnav_resize_left_key    C-Left
+    @lvim-winnav_resize_down_key    C-Down
+    @lvim-winnav_resize_up_key      C-Up
+    @lvim-winnav_resize_right_key   C-Right
+    @lvim-winnav_resize_step_size   3
+    @lvim-winnav_no_wrap            on
+    @lvim-winnav_pane_option        @lvim_nvim
+    @lvim-winnav_copy_mode          on
+
+Not using tpm? `:LvimWinNav mux-config` prints the same bindings, ready to
+paste (and the equivalent for WezTerm, kitty and Zellij).
+
+==============================================================================
+11. BACKENDS                                              *lvim-winnav-backends*
+
+tmux · WezTerm · kitty · Zellij, auto-detected from the environment ($TMUX,
+$WEZTERM_PANE, $KITTY_LISTEN_ON, $ZELLIJ) and forceable with
+`multiplexer.backend`. Every call is `vim.system` with an ARGV LIST — never a
+shell string, so a pane title with a space or a quote can neither break nor
+inject into a command.
+
+A missing multiplexer is NOT an error: edges configured as "multiplexer" simply
+behave as "stop".
+
+tmux answers the edge query (`pane_at_*`), reports zoom, and supports the pane
+mark. WezTerm answers the edge query (`get-pane-direction`). kitty and Zellij
+expose no edge query — the MOVE itself answers (it fails / no-ops when there is
+nothing that way); nothing is ever guessed.
+
+==============================================================================
+12. HEALTH                                                  *lvim-winnav-health*
+
+`:checkhealth lvim-winnav` reports:
+
+    • the detected multiplexer and the environment variable it came from
+    • whether its binary is reachable
+    • the EXACT commands the plugin runs
+    • whether THIS pane is marked (`@lvim_nvim`)
+    • whether the running multiplexer forwards the keys, and whether those
+      bindings use the mark (a process guess still works, but forks per key)
+    • the effective `at_edge` per direction, and the resize step in cells
+    • which optional integrations are present (lvim-winmove, lvim-msgarea)
+
+vim:tw=78:ts=8:ft=help:norl:
