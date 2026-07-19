@@ -109,10 +109,15 @@ local function wrap(dir)
     if not far then
         return false -- a single window on that axis: there is nothing to wrap to
     end
-    while far do
-        api.nvim_set_current_win(far)
-        far = M.neighbour(far, back)
+    -- Walk to the far edge WITHOUT focusing each intermediate window: M.neighbour resolves in the
+    -- target's context (nvim_win_call), so we can find the destination first and switch EXACTLY once —
+    -- every nvim_set_current_win otherwise fires WinLeave/WinEnter + a redraw for a window nobody sees.
+    local next_win = M.neighbour(far, back)
+    while next_win do
+        far = next_win
+        next_win = M.neighbour(far, back)
     end
+    api.nvim_set_current_win(far)
     return true
 end
 
