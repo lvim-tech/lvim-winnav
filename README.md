@@ -169,6 +169,12 @@ require("lvim-winnav").setup({
     at_edge = "multiplexer",
 
     -- The resize step: a number of CELLS, or a percentage STRING of the parent container's size ("5%").
+    -- The plugin's OWN normal-mode maps, bound at setup(). `false` binds nothing (map the API
+    -- yourself); a direction left out of a table is simply not bound.
+    keys = {
+        move = { left = "<C-h>", down = "<C-j>", up = "<C-k>", right = "<C-l>" },
+        resize = { left = "<C-Left>", down = "<C-Down>", up = "<C-Up>", right = "<C-Right>" },
+    },
     default_amount = 3,
 
     -- A directional swap moves the buffer; `true` moves the cursor with it.

@@ -198,6 +198,30 @@ end
 --- Optional — the defaults work without it, but the pane mark (the tmux side's variable) needs it.
 ---@param opts LvimWinNavConfig?
 ---@return nil
+--- Bind the plugin's own move / resize keys, as `config.keys` describes them.
+---
+--- HERE, NOT IN THE HOST. These keys are the plugin's public surface — each one calls an API that
+--- knows about edges, docks and the multiplexer — so every consumer that wanted them had to
+--- re-implement the same four closures. A direction the config leaves out is not bound, and
+--- `keys = false` binds nothing at all.
+---@return nil
+local function bind_keys()
+    local keys = config.keys
+    if keys == false or type(keys) ~= "table" then
+        return
+    end
+    for dir, lhs in pairs(keys.move or {}) do
+        vim.keymap.set("n", lhs, function()
+            M.move(dir)
+        end, { desc = "Window " .. dir, silent = true })
+    end
+    for dir, lhs in pairs(keys.resize or {}) do
+        vim.keymap.set("n", lhs, function()
+            M.resize(dir)
+        end, { desc = "Resize " .. dir, silent = true })
+    end
+end
+
 function M.setup(opts)
     if opts then
         merge(config, opts)
@@ -220,6 +244,7 @@ function M.setup(opts)
     })
 
     register_pane_mark()
+    bind_keys()
 end
 
 return M

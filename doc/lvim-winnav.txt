@@ -77,6 +77,10 @@ the live config): >lua
 
     require("lvim-winnav").setup({
         at_edge = "multiplexer",       -- or a per-direction table
+        keys = {                       -- the plugin's own maps; false binds nothing
+            move = { left = "<C-h>", down = "<C-j>", up = "<C-k>", right = "<C-l>" },
+            resize = { left = "<C-Left>", down = "<C-Down>", up = "<C-Up>", right = "<C-Right>" },
+        },
         default_amount = 3,            -- cells, or a percentage string ("5%")
         move_cursor_with_buffer = false,
         disable_multiplexer_nav_when_zoomed = true,

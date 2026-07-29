@@ -65,6 +65,10 @@
 ---@field size_format string   How the live window size is rendered (width, height)
 
 ---@class LvimWinNavConfig
+---@field keys                               { move: table<LvimWinNavDir, string>?, resize: table<LvimWinNavDir, string>? }|false
+---   The plugin's own normal-mode maps, bound at setup(): `move` focuses the window in that
+---   direction (with the edge behaviour `at_edge` describes) and `resize` grows/shrinks by
+---   `default_amount`. `false` binds nothing — for a host that maps the API itself
 ---@field at_edge                            LvimWinNavEdge|table<LvimWinNavDir, LvimWinNavEdge>
 ---@field default_amount                     integer|string  Resize step: cells, or a percentage of the parent ("5%")
 ---@field move_cursor_with_buffer            boolean         A swap takes the cursor along into the moved buffer
@@ -92,6 +96,17 @@ return {
     -- The resize step: a number of CELLS, or a percentage STRING of the parent container's size ("5%") — the
     -- same key then means the same thing on an 80-column and a 200-column screen.
     default_amount = 3,
+
+    -- THE PLUGIN'S OWN KEYS. `false` binds nothing at all (the host maps `move`/`resize` itself); a
+    -- table binds exactly what it lists, and a direction left out is simply not bound. These are
+    -- normal-mode maps set at setup(), the same moment every other part of this plugin is wired.
+    --
+    -- Named as the actions they perform, not as a flat key list, so a rebind cannot silently point a
+    -- "move" key at a resize: the direction is the KEY of the entry and the keystroke is its value.
+    keys = {
+        move = { left = "<C-h>", down = "<C-j>", up = "<C-k>", right = "<C-l>" },
+        resize = { left = "<C-Left>", down = "<C-Down>", up = "<C-Up>", right = "<C-Right>" },
+    },
 
     -- A directional swap moves the buffer; `true` moves the cursor with it (you follow your buffer).
     move_cursor_with_buffer = false,
