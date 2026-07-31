@@ -156,6 +156,18 @@ function M.move(dir)
     local cur = api.nvim_get_current_win()
     local nb = M.neighbour(cur, dir)
     if nb then
+        -- A panel whose chrome BAND faces the edge we are crossing is a LAYER, not something to jump over:
+        -- entering it from above lands on its top band first, and one more press continues into the content.
+        -- Without this, a band is reachable only from inside the panel — you can step up out of the list into
+        -- it, but never down into it — so the same bar behaves differently depending on which side you
+        -- approach from. The registry lives in lvim-ui (the band's owner); absent, this is a plain move.
+        local ok, band = pcall(require, "lvim-ui.winband")
+        if ok and type(band.at) == "function" then
+            local enter = band.at(nb, dir == "down" and "top" or dir == "up" and "bottom" or nil)
+            if enter and enter() then
+                return true
+            end
+        end
         api.nvim_set_current_win(nb)
         return true
     end

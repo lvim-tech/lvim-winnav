@@ -28,6 +28,9 @@ nothing here requires the plugin's own tmux half.)
   decides: `multiplexer` · `wrap` · `split` · `dock` · `stop` — one value, or **one per direction**.
 - **Dock-aware edges** — before an edge behaviour runs, a docked lvim panel in that direction (the message
   zone) is focused instead of leaving Neovim. That is what `<C-j>` should do, as a config value.
+- **Panel bands are a layer** — moving into a window whose chrome band faces the edge you cross lands on the
+  band first (its buttons), and one more press continues into the content. A band is reachable from both
+  sides, instead of only from inside the panel it belongs to.
 - **Resizing with the right semantics** — the boundary in the pressed direction moves in that direction, from
   any window in the pair. At the outermost edge the boundary belongs to the multiplexer, so the same key
   resizes the **pane**.
