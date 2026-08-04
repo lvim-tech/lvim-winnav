@@ -70,9 +70,8 @@ function M.available()
 end
 
 --- Kitty cannot be ASKED (see the module header): UNKNOWN, so the move itself answers.
----@param _dir LvimWinNavDir
 ---@return boolean? at_edge
-function M.current_pane_at_edge(_dir)
+function M.current_pane_at_edge(_)
     return nil
 end
 
@@ -114,9 +113,8 @@ function M.resize_pane(dir, cells)
 end
 
 --- Kitty has no pane-scoped user variable to mark. No-op.
----@param _on boolean
 ---@return boolean ok
-function M.mark_pane(_on)
+function M.mark_pane(_)
     return false
 end
 

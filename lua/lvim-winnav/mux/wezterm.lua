@@ -105,9 +105,8 @@ function M.resize_pane(dir, cells)
 end
 
 --- WezTerm has no pane-scoped user option to mark — its config asks the pane itself. No-op.
----@param _on boolean
 ---@return boolean ok
-function M.mark_pane(_on)
+function M.mark_pane(_)
     return false
 end
 

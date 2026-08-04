@@ -176,10 +176,9 @@ local function dispatch(args)
 end
 
 --- Completion for `:LvimWinNav`: the subcommands, then the directions of the ones that take a direction.
----@param _lead string
 ---@param line string
 ---@return string[]
-local function complete(_lead, line)
+local function complete(_, line)
     local args = vim.split(vim.trim(line), "%s+")
     -- args[1] is the command name itself; a trailing space means the NEXT argument is being completed.
     local typing_second = #args == 2 and not line:match("%s$")
@@ -194,10 +193,6 @@ local function complete(_lead, line)
     return {}
 end
 
---- Merge user options into the live config, bind the highlights, register `:LvimWinNav` and the pane mark.
---- Optional — the defaults work without it, but the pane mark (the tmux side's variable) needs it.
----@param opts LvimWinNavConfig?
----@return nil
 --- Bind the plugin's own move / resize keys, as `config.keys` describes them.
 ---
 --- HERE, NOT IN THE HOST. These keys are the plugin's public surface — each one calls an API that
@@ -222,6 +217,10 @@ local function bind_keys()
     end
 end
 
+--- Merge user options into the live config, bind the highlights, register `:LvimWinNav` and the pane mark.
+--- Optional — the defaults work without it, but the pane mark (the tmux side's variable) needs it.
+---@param opts LvimWinNavConfig?
+---@return nil
 function M.setup(opts)
     if opts then
         merge(config, opts)

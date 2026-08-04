@@ -41,9 +41,8 @@ end
 
 --- Zellij cannot be asked: UNKNOWN. Its `move-focus` is a no-op at the outermost pane (it never wraps), so
 --- letting it try is exactly right.
----@param _dir LvimWinNavDir
 ---@return boolean? at_edge
-function M.current_pane_at_edge(_dir)
+function M.current_pane_at_edge(_)
     return nil
 end
 
@@ -85,9 +84,8 @@ function M.resize_pane(dir, cells)
 end
 
 --- Zellij has no pane-scoped user option. No-op.
----@param _on boolean
 ---@return boolean ok
-function M.mark_pane(_on)
+function M.mark_pane(_)
     return false
 end
 
