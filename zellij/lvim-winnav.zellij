@@ -1,0 +1,147 @@
+#!/usr/bin/env sh
+#
+# lvim-winnav — the ZELLIJ installer (the tpm analogue, run ONCE by hand).
+#
+# tmux has a hook an installer can ride (tpm executes a plugin repo's `*.tmux` on start); Zellij has
+# none — nothing ever runs out of a repo. So the Zellij half installs with one explicit command:
+#
+#   ./lvim-winnav.zellij            (from the repo root — the root file is a shim to this script)
+#
+# What it does — each step idempotent, so re-running is always safe:
+#
+#   1. copies the shipped plugin  zellij/lvim-winnav.wasm  →  <config>/plugins/
+#   2. adds the eight nav keybinds to the `normal {` block of config.kdl (skipped when any
+#      lvim-winnav MessagePlugin bind is already there — including hand-customised keys)
+#   3. adds the plugin to `load_plugins` (ONE background instance per session, so the first nav
+#      keypress is not swallowed by a cold plugin launch; a layout would load one instance PER TAB,
+#      which is exactly wrong — never do that)
+#   4. pre-grants the plugin's permissions in the permission cache, so no prompt interrupts the
+#      first keypress
+#
+# config.kdl is backed up first (config.kdl.lvim-winnav.bak) and the patched file is validated with
+# `zellij setup --check`; a failed validation restores the backup and aborts. When config.kdl has no
+# `normal {` block to patch, nothing is guessed: the script says so and points at
+# `:LvimWinNav mux-config`, which prints the same blocks for a manual merge (also the way to install
+# CUSTOM keys — this installer binds the defaults: C-h/j/k/l move, C-Arrows resize).
+#
+# Running sessions keep their old bindings — the config is read at session start. New sessions pick
+# everything up.
+#
+# Respects $ZELLIJ_CONFIG_DIR (default ~/.config/zellij) and $ZELLIJ_CACHE_DIR (default
+# ~/.cache/zellij, the permission cache's home).
+#
+set -eu
+
+say() { printf 'lvim-winnav: %s\n' "$1"; }
+fail() {
+    printf 'lvim-winnav: %s\n' "$1" >&2
+    exit 1
+}
+
+repo=$(cd "$(dirname "$0")/.." && pwd)
+config_dir=${ZELLIJ_CONFIG_DIR:-"$HOME/.config/zellij"}
+cache_dir=${ZELLIJ_CACHE_DIR:-"$HOME/.cache/zellij"}
+config="$config_dir/config.kdl"
+plugins_dir="$config_dir/plugins"
+wasm_src="$repo/zellij/lvim-winnav.wasm"
+wasm="$plugins_dir/lvim-winnav.wasm"
+url="file:$wasm"
+
+[ -f "$wasm_src" ] || fail "shipped plugin not found: $wasm_src (build it: cd zellij && cargo build --release --target wasm32-wasip1)"
+[ -f "$config" ] || fail "no Zellij config at $config — start Zellij once (it writes one), then re-run"
+
+# ── 1. the plugin ────────────────────────────────────────────────────────────
+if [ -f "$wasm" ] && cmp -s "$wasm_src" "$wasm"; then
+    say "plugin already installed: $wasm"
+else
+    mkdir -p "$plugins_dir"
+    cp "$wasm_src" "$wasm"
+    say "plugin installed: $wasm"
+fi
+
+# ── 2 + 3. config.kdl ────────────────────────────────────────────────────────
+# What is still missing? An existing lvim-winnav MessagePlugin bind means the keybinds are done —
+# whatever keys the user chose; an existing load_plugins entry for the wasm means the preload is done.
+need_binds=1
+grep -q 'MessagePlugin "file:[^"]*lvim-winnav\.wasm"' "$config" && need_binds=0
+need_preload=1
+grep -q "^[[:space:]]*\"file:[^\"]*lvim-winnav\.wasm\"" "$config" && need_preload=0
+
+if [ "$need_binds" = 1 ] && ! grep -q '^[[:space:]]*normal[[:space:]]*{' "$config"; then
+    fail "config.kdl has no \`normal {\` keybinds block to patch — run :LvimWinNav mux-config in Neovim and merge its blocks by hand"
+fi
+
+if [ "$need_binds" = 1 ] || [ "$need_preload" = 1 ]; then
+    backup="$config.lvim-winnav.bak"
+    cp "$config" "$backup"
+
+    patched="$config.lvim-winnav.tmp"
+    awk -v url="$url" -v need_binds="$need_binds" -v need_preload="$need_preload" '
+        # Insert the keybinds right after the FIRST `normal {` line, indented one level deeper.
+        need_binds == 1 && !did_binds && /^[[:space:]]*normal[[:space:]]*{/ {
+            print
+            indent = $0; sub(/[^ \t].*$/, "", indent); indent = indent "    "
+            printf "%s// lvim-winnav — nav keys go through the plugin: forwarded INTO a pane running\n", indent
+            printf "%s// Neovim (its splits come first), moved/resized otherwise. Edge-safe: never wraps.\n", indent
+            split("h j k l", mk, " "); split("left down up right", md, " ")
+            for (i = 1; i <= 4; i++)
+                printf "%sbind \"Ctrl %s\" { MessagePlugin \"%s\" { name \"move\"; payload \"%s\"; }; }\n", indent, mk[i], url, md[i]
+            for (i = 1; i <= 4; i++)
+                printf "%sbind \"Ctrl %s\" { MessagePlugin \"%s\" { name \"resize\"; payload \"%s\"; }; }\n", indent, md[i], url, md[i]
+            did_binds = 1
+            next
+        }
+        # Insert the preload entry right after the `load_plugins {` line.
+        need_preload == 1 && !did_preload && /^[[:space:]]*load_plugins[[:space:]]*{/ {
+            print
+            indent = $0; sub(/[^ \t].*$/, "", indent); indent = indent "    "
+            printf "%s// lvim-winnav: ONE background instance per session (a layout would be one PER TAB)\n", indent
+            printf "%s\"%s\"\n", indent, url
+            did_preload = 1
+            next
+        }
+        { print }
+        # No load_plugins block anywhere: append one (a new top-level node is always safe).
+        END {
+            if (need_preload == 1 && !did_preload) {
+                print ""
+                print "// lvim-winnav: ONE background instance per session (a layout would be one PER TAB)"
+                print "load_plugins {"
+                printf "    \"%s\"\n", url
+                print "}"
+            }
+        }
+    ' "$config" > "$patched"
+    mv "$patched" "$config"
+
+    # Validate; a config Zellij cannot parse must never be left behind.
+    if command -v zellij >/dev/null 2>&1; then
+        if ! ZELLIJ_CONFIG_FILE="$config" zellij setup --check >/dev/null 2>&1; then
+            mv "$backup" "$config"
+            fail "patched config failed \`zellij setup --check\` — original restored, nothing changed"
+        fi
+    fi
+    [ "$need_binds" = 1 ] && say "keybinds added to config.kdl (normal mode: Ctrl h/j/k/l move, Ctrl Arrows resize)"
+    [ "$need_preload" = 1 ] && say "preload added to config.kdl (load_plugins)"
+    say "backup of the previous config: $backup"
+else
+    say "config.kdl already set up (keybinds + preload)"
+fi
+
+# ── 4. permissions ───────────────────────────────────────────────────────────
+# Pre-grant what the plugin asks for on load, so no permission prompt ever eats the first keypress.
+perms="$cache_dir/permissions.kdl"
+if [ -d "$cache_dir" ] && { [ ! -f "$perms" ] || ! grep -q "lvim-winnav\.wasm" "$perms"; }; then
+    {
+        printf '"%s" {\n' "$wasm"
+        printf '    ReadApplicationState\n'
+        printf '    ChangeApplicationState\n'
+        printf '    WriteToStdin\n'
+        printf '}\n'
+    } >> "$perms"
+    say "permissions pre-granted: $perms"
+else
+    say "permissions already granted (or no cache dir yet — Zellij will ask once)"
+fi
+
+say "done — NEW Zellij sessions have the handoff (running sessions keep their old keys)"

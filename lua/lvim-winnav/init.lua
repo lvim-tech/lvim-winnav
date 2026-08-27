@@ -9,9 +9,11 @@
 -- The handoff has TWO halves, and the plugin ships both:
 --   • Neovim's half — at an edge, tell the multiplexer to select / resize the pane that way (mux/*.lua).
 --   • The multiplexer's half — a key pressed while the pane runs Neovim must be FORWARDED to it instead of
---     moving the pane. `:LvimWinNav mux-config` prints that config, and `lvim-winnav.tmux` (the repo-root
---     script) installs it for tmux users. It tests a pane MARK Neovim sets on itself (`@lvim_nvim`), not a
---     `ps | grep` guess — no shell fork per keypress, and correct under a wrapper / sudo / ssh.
+--     moving the pane. `:LvimWinNav mux-config` prints that config; `lvim-winnav.tmux` (the repo-root
+--     script) installs it for tmux users, and `zellij/lvim-winnav.wasm` (a shipped WASM plugin) is the same
+--     half for Zellij. Both test a pane MARK Neovim sets on itself (`@lvim_nvim` — a tmux pane option / the
+--     Zellij pane title), not a `ps | grep` guess — no shell fork per keypress, and correct under a
+--     wrapper / sudo / ssh.
 --
 --   :LvimWinNav left|down|up|right      -- move the cursor (at the edge: the configured behaviour)
 --   :LvimWinNav resize <dir> [amount]   -- move the boundary in <dir> (cells or "5%")

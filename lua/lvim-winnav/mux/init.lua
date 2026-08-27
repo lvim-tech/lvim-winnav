@@ -42,10 +42,12 @@ local M = {}
 ---@field config_block         fun(): string[]
 ---@field commands             fun(): table<string, string>
 
--- The backends, in DETECTION order: the innermost multiplexer wins (tmux running inside WezTerm owns the
--- panes Neovim sees).
+-- The backends, in DETECTION order: the innermost multiplexer wins. tmux and Zellij are terminal
+-- MULTIPLEXERS — when their variable is in the environment they own the panes Neovim sees, even though the
+-- TERMINAL'S own variable ($KITTY_LISTEN_ON / $WEZTERM_PANE) is inherited right through them (Zellij inside
+-- kitty leaves both in every pane). WezTerm and kitty can only be the answer when no multiplexer runs.
 ---@type string[]
-local ORDER = { "tmux", "wezterm", "kitty", "zellij" }
+local ORDER = { "tmux", "zellij", "wezterm", "kitty" }
 
 ---@type LvimWinNavMuxBackend|false|nil  nil = not resolved yet, false = none
 local cached = nil

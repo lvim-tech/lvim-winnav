@@ -1,0 +1,15 @@
+[package]
+name = "lvim-winnav"
+version = "0.1.0"
+edition = "2021"
+authors = ["lvim-tech"]
+description = "The zellij half of lvim-winnav's window <-> pane navigation handoff"
+license = "BSD-3-Clause"
+
+[dependencies]
+zellij-tile = "0.44.3"
+
+[profile.release]
+lto = true
+opt-level = "z"
+strip = true

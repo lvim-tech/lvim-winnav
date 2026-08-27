@@ -1,0 +1,6 @@
+#!/usr/bin/env sh
+#
+# The Zellij installer, at the root for symmetry with `lvim-winnav.tmux` — the real script lives
+# with the rest of the Zellij half in zellij/. Unlike the tmux file (which tpm runs on every tmux
+# start), nothing runs this automatically: Zellij has no tpm-like hook, so run it once by hand.
+exec "$(cd "$(dirname "$0")" && pwd)/zellij/lvim-winnav.zellij" "$@"

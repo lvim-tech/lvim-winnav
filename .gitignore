@@ -13,6 +13,7 @@ luac.out
 *.luac
 
 # Build / test / logs
+/zellij/target
 /build
 /debug
 /.repro

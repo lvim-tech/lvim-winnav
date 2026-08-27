@@ -14,7 +14,8 @@ here delegates the exchange to it rather than growing a second implementation.)
 - **The multiplexer's half** — a key pressed while the pane runs Neovim must be _forwarded_ to it instead of
   moving the pane. `:LvimWinNav mux-config` prints that config for the detected multiplexer, and
   `lvim-winnav.tmux` (a script at the repo root) installs it for tmux users: `set -g @plugin
-  'lvim-tech/lvim-winnav'` **is** the whole tmux configuration.
+  'lvim-tech/lvim-winnav'` **is** the whole tmux configuration. For Zellij the same half is a shipped WASM
+  plugin (`zellij/lvim-winnav.wasm`) — see _The Zellij side_.
 
 The tmux half tests a **pane mark**, not a process guess: while Neovim runs it sets the pane-scoped option
 `@lvim_nvim`, so the tmux binding evaluates `#{==:#{@lvim_nvim},1}` — a variable lookup inside tmux. The usual
@@ -127,7 +128,10 @@ require("lvim-winnav").mux_config() -- the generated config block, as lines
 
 ## The tmux side
 
-`lvim-winnav.tmux` is a POSIX shell script tmux runs on start (via tpm). It installs the root-table bindings
+`lvim-winnav.tmux` is a POSIX shell script tmux runs on start (via tpm). The real script lives in `tmux/`
+with the rest of the tmux half; the repo-root `lvim-winnav.tmux` is a two-line shim that hands off to it —
+tpm only executes `*.tmux` files at the repo root, so the root file is the tpm contract, nothing more.
+It installs the root-table bindings
 that forward the keys into Neovim when the pane is marked, and move / resize the pane when it is not. Every
 binding is `-n` (root table): **none of them uses, or can collide with, your prefix key.**
 
@@ -154,6 +158,48 @@ Its options (set them before the tpm `run` line):
 
 Not using tpm? `:LvimWinNav mux-config` prints exactly the same bindings, ready to paste into `tmux.conf`
 (and the same for WezTerm, kitty and Zellij).
+
+## The Zellij side
+
+Zellij's keybinds run in the **server**: `bind "Ctrl l" { MoveFocus "right"; }` moves the Zellij pane before
+the program inside it ever sees the key, and Zellij has no pane-scoped variable and no conditional keybind —
+the question "does the pane in front of me run Neovim?" cannot be asked from the config at all. So the
+Zellij half is a small **WASM plugin** (`zellij/` in this repo, shipped built as `zellij/lvim-winnav.wasm`):
+the config pipes the nav keys to it, and the plugin either **forwards** the key into the focused pane (when
+it runs Neovim) or moves / resizes the Zellij pane itself. It reacts only to those pipes — it never
+intercepts the keyboard and renders nothing.
+
+"Runs Neovim" is the same **mark** contract as tmux, expressed in the one pane-scoped thing Zellij has:
+Neovim renames its own pane to `multiplexer.pane_option` (`@lvim_nvim`) on VimEnter and undoes the rename on
+VimLeave, so the plugin tests the focused pane's **title** — a lookup, not a process guess, and correct
+under a wrapper / sudo / ssh / a renamed binary. A plain `nvim` title / command also counts (Zellij titles a
+pane after its running command by default), so Neovim without the mark still forwards.
+
+Install — one command, run once (the tpm analogue; Zellij has no hook that runs anything out of a repo):
+
+```sh
+./lvim-winnav.zellij
+```
+
+It copies the shipped plugin into `~/.config/zellij/plugins/`, adds the keybinds and the `load_plugins`
+preload to `config.kdl` (idempotent; the previous config is backed up and the patched one is validated with
+`zellij setup --check` — a failure restores it untouched), and pre-grants the plugin's permissions so no
+prompt eats the first keypress. New sessions pick everything up. Custom keys, or a config it refuses to
+patch? `:LvimWinNav mux-config` prints the same blocks to merge by hand.
+
+Two Zellij-specific notes:
+
+- The plugin is preloaded **once per session** (`load_plugins`). Never put it in a **layout** — a layout
+  instantiates one plugin per tab, and every instance receives every pipe. (Against that misconfiguration
+  each instance acts only when the focused pane is in its own tab.)
+- At the outermost pane a move key is a **no-op**: it never wraps and never switches the tab (Zellij's
+  `MoveFocusOrTab` is deliberately not used — that is `no_wrap` behaviour).
+
+Building from source (the shipped `.wasm` makes this optional):
+
+```sh
+cd zellij && cargo build --release --target wasm32-wasip1
+```
 
 ## Default configuration
 
@@ -271,7 +317,7 @@ not the screen — so `"10%"` is the same visual step at any nesting depth and a
 | tmux    | yes  | yes    | yes (`pane_at_*`) | yes        | yes       |
 | WezTerm | yes  | yes    | yes (`get-pane-direction`) | yes | not needed |
 | kitty   | yes  | yes    | the move answers (kitty has no query) | n/a | not needed |
-| Zellij  | yes  | yes    | the move answers (Zellij has no query) | n/a | not needed |
+| Zellij  | yes  | yes    | the move answers (Zellij has no query) | n/a | yes (pane title, read by the shipped Zellij plugin) |
 
 A backend that cannot be asked never guesses: the move itself is the answer (it fails, or no-ops, when there
 is nothing that way).
