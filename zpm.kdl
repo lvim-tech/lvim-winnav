@@ -1,0 +1,22 @@
+// lvim-winnav — the lvim-zpm manifest: what the manager installs for the Zellij half.
+//
+// lvim-zpm reads this on every session start, applies the keybinds LIVE (reconfigure — config.kdl
+// is never touched) and pre-grants the permissions. The plugin launches lazily on the first nav
+// keypress — which is not lost: it is stashed and replayed the moment the plugin has state.
+// `{{wasm}}` becomes the absolute `file:` URL of the built plugin below.
+plugin {
+    wasm "zellij/lvim-winnav.wasm"
+    permissions "ReadApplicationState" "ChangeApplicationState" "WriteToStdin"
+    keybinds {
+        normal {
+            bind "Ctrl h" { MessagePlugin "{{wasm}}" { name "move"; payload "left"; }; }
+            bind "Ctrl j" { MessagePlugin "{{wasm}}" { name "move"; payload "down"; }; }
+            bind "Ctrl k" { MessagePlugin "{{wasm}}" { name "move"; payload "up"; }; }
+            bind "Ctrl l" { MessagePlugin "{{wasm}}" { name "move"; payload "right"; }; }
+            bind "Ctrl left" { MessagePlugin "{{wasm}}" { name "resize"; payload "left"; }; }
+            bind "Ctrl down" { MessagePlugin "{{wasm}}" { name "resize"; payload "down"; }; }
+            bind "Ctrl up" { MessagePlugin "{{wasm}}" { name "resize"; payload "up"; }; }
+            bind "Ctrl right" { MessagePlugin "{{wasm}}" { name "resize"; payload "right"; }; }
+        }
+    }
+}

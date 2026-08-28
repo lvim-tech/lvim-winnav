@@ -18,13 +18,17 @@
 // without lvim-winnav, or marks disabled) a title or command of `nvim` also counts: zellij titles
 // a pane after its running command by default.
 //
-// LOADING — exactly one instance, on purpose. The plugin runs ONCE PER SESSION as a BACKGROUND
-// plugin (`load_plugins` in config.kdl; a `MessagePlugin` pipe would also launch it on first use).
-// It must NOT be placed in a layout: a layout plugin is instantiated once per tab, every instance
-// receives every pipe, and N instances would forward N keystrokes. Against that misconfiguration
-// each instance locates its own pane in the PaneManifest and, when it does live in a tab, acts
-// only while that tab is the active one; the intended background instance lives in no tab and
-// always acts.
+// LOADING — exactly one instance, on purpose, launched LAZILY: the first nav keypress's
+// `MessagePlugin` pipe launches the plugin in the background (zellij launches a pipe's target when
+// none is running), and every later keypress reaches that same instance. The launching keypress
+// itself is not lost — it arrives before any state and is stashed, then honoured on the first
+// PaneUpdate, milliseconds later. Do not add the plugin to `load_plugins`: a preloaded instance
+// carries a different identity than the keybind-launched one, so the keybind pipes never reach it —
+// it would only idle. And NEVER place it in a layout: a layout plugin is instantiated once per
+// tab, every instance receives every pipe, and N instances would forward N keystrokes. Against
+// that misconfiguration each instance locates its own pane in the PaneManifest and, when it does
+// live in a tab, acts only while that tab is the active one; the intended background instance
+// lives in no tab and always acts.
 //
 // The plugin only ever reacts to a pipe. It never intercepts the keyboard (no
 // `intercept_key_presses`) and it renders nothing, so it can never lock the keyboard.
@@ -79,6 +83,11 @@ struct State {
     panes: PaneManifest,
     tabs: Vec<TabInfo>,
     own_plugin_id: Option<u32>,
+    /// A nav key that arrived before the first PaneUpdate. The very first keypress of a session
+    /// LAUNCHES this plugin (a `MessagePlugin` pipe launches its target when none is running), and
+    /// that pipe is delivered before any state: instead of swallowing the user's key, it is
+    /// stashed here and honoured the moment the manifest arrives — milliseconds later.
+    pending: Option<(String, Direction)>,
 }
 
 register_plugin!(State);
@@ -100,6 +109,12 @@ impl ZellijPlugin for State {
             Event::TabUpdate(tabs) => self.tabs = tabs,
             _ => {}
         }
+        // The keypress that launched this instance, replayed now that the state exists.
+        if self.pending.is_some() && !self.panes.panes.is_empty() && !self.tabs.is_empty() {
+            if let Some((action, dir)) = self.pending.take() {
+                self.act(&action, dir);
+            }
+        }
         false // nothing to render, ever
     }
 
@@ -113,7 +128,12 @@ impl ZellijPlugin for State {
             .as_deref()
             .and_then(|p| p.parse::<Direction>().ok());
         if let Some(dir) = dir {
-            self.act(action, dir);
+            if self.panes.panes.is_empty() || self.tabs.is_empty() {
+                // Cold start: this very pipe launched the plugin. Keep the key for the state.
+                self.pending = Some((action.to_string(), dir));
+            } else {
+                self.act(action, dir);
+            }
         }
         false
     }
