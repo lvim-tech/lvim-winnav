@@ -18,17 +18,18 @@
 // without lvim-winnav, or marks disabled) a title or command of `nvim` also counts: zellij titles
 // a pane after its running command by default.
 //
-// LOADING — exactly one instance, on purpose, launched LAZILY: the first nav keypress's
-// `MessagePlugin` pipe launches the plugin in the background (zellij launches a pipe's target when
-// none is running), and every later keypress reaches that same instance. The launching keypress
-// itself is not lost — it arrives before any state and is stashed, then honoured on the first
-// PaneUpdate, milliseconds later. Do not add the plugin to `load_plugins`: a preloaded instance
-// carries a different identity than the keybind-launched one, so the keybind pipes never reach it —
-// it would only idle. And NEVER place it in a layout: a layout plugin is instantiated once per
-// tab, every instance receives every pipe, and N instances would forward N keystrokes. Against
-// that misconfiguration each instance locates its own pane in the PaneManifest and, when it does
-// live in a tab, acts only while that tab is the active one; the intended background instance
-// lives in no tab and always acts.
+// LOADING — exactly one instance, on purpose: a `load_plugins` entry in config.kdl with the SAME
+// URL the keybinds pipe to. That preloaded background instance is the one every keybind pipe
+// reaches (measured on zellij 0.46). Without the entry the plugin still works, less gracefully:
+// the first nav keypress's pipe launches its target — into a VISIBLE tiled pane, which is how
+// zellij launches a keybind pipe's missing target — and that keypress is stashed here and
+// honoured on the first PaneUpdate, milliseconds later. (A `MessageToPlugin` pre-warm from
+// another plugin does NOT work as a substitute: it carries a different identity and the keybind
+// pipes never reach it.) NEVER place the plugin in a layout: a layout plugin is instantiated once
+// per tab, every instance receives every pipe, and N instances would forward N keystrokes.
+// Against that misconfiguration each instance locates its own pane in the PaneManifest and, when
+// it does live in a tab, acts only while that tab is the active one; the intended background
+// instance lives in no tab and always acts.
 //
 // The plugin only ever reacts to a pipe. It never intercepts the keyboard (no
 // `intercept_key_presses`) and it renders nothing, so it can never lock the keyboard.
