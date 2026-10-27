@@ -14,9 +14,18 @@ local fn = vim.fn
 
 local M = {}
 
---- The total size of the layout NODE `node` on `axis` (its windows plus the separator columns/rows between
---- them). A leaf is one window; a `row`/`col` is the sum of its children (plus one separator per gap for a
---- row — Vim draws a vertical separator column between side-by-side windows).
+--- The total size of the layout NODE `node` on `axis`.
+---
+--- A node only DIVIDES the axis it splits on. A `row` puts its children side by side, so on the horizontal
+--- axis its width is their sum (plus one separator column per gap — Vim draws a vertical separator between
+--- side-by-side windows); but measured VERTICALLY those same children all span the full height of the row,
+--- so the row's height is one child's, not their sum. A `col` is the mirror of that, and the statusline
+--- dividing its children is already counted outside winheight().
+---
+--- Summing along both axes counted the same cells once per sibling, and since the error compounds with each
+--- level it grew with the nesting depth: a window inside a column inside a row reported a parent width of
+--- 120 on an 80-column screen, so a "25%" step moved 30 cells instead of 20. Measuring the percentage
+--- against the container is the entire point of the module, and nesting is where it was wrong.
 ---@param node table  a `vim.fn.winlayout()` node: { "leaf", winid } | { "row"|"col", children }
 ---@param axis "horizontal"|"vertical"
 ---@return integer
@@ -26,13 +35,21 @@ local function node_size(node, axis)
         local win = node[2] --[[@as integer]]
         return axis == "horizontal" and fn.winwidth(win) or fn.winheight(win)
     end
-    local total, children = 0, node[2] --[[@as table[] ]]
+    local children = node[2] --[[@as table[] ]]
+    local divides = (kind == "row" and axis == "horizontal") or (kind == "col" and axis == "vertical")
+    if not divides then
+        -- Across its own grain: every child spans the node, so the node is as big as its biggest child.
+        local widest = 0
+        for _, child in ipairs(children) do
+            widest = math.max(widest, node_size(child, axis))
+        end
+        return widest
+    end
+    local total = 0
     for _, child in ipairs(children) do
         total = total + node_size(child, axis)
     end
-    -- A `row` stacks its children side by side with a 1-column separator between them; a `col` stacks them
-    -- vertically, and the statusline that divides them is already counted OUTSIDE winheight().
-    if kind == "row" and axis == "horizontal" then
+    if kind == "row" then
         total = total + math.max(0, #children - 1)
     end
     return total
