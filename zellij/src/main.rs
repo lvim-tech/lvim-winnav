@@ -79,11 +79,22 @@ fn is_nvim(pane: &PaneInfo) -> bool {
     pane.terminal_command.as_deref().and_then(command_word).as_deref() == Some("nvim")
 }
 
+/// The pane a `PaneId` names: terminal and plugin panes number separately.
+fn pane_by_id(panes: &[PaneInfo], id: PaneId) -> Option<&PaneInfo> {
+    let (wanted, plugin) = match id {
+        PaneId::Terminal(n) => (n, false),
+        PaneId::Plugin(n) => (n, true),
+    };
+    panes.iter().find(|p| p.id == wanted && p.is_plugin == plugin)
+}
+
 #[derive(Default)]
 struct State {
     panes: PaneManifest,
     tabs: Vec<TabInfo>,
     own_plugin_id: Option<u32>,
+    own_client_id: Option<u16>,
+    clients: Vec<ClientInfo>,
     /// A nav key that arrived before the first PaneUpdate. The very first keypress of a session
     /// LAUNCHES this plugin (a `MessagePlugin` pipe launches its target when none is running), and
     /// that pipe is delivered before any state: instead of swallowing the user's key, it is
@@ -100,18 +111,28 @@ impl ZellijPlugin for State {
             PermissionType::ChangeApplicationState, // move_focus / resize
             PermissionType::WriteToStdin,           // forward the key into Neovim's pane
         ]);
-        subscribe(&[EventType::PaneUpdate, EventType::TabUpdate]);
-        self.own_plugin_id = Some(get_plugin_ids().plugin_id);
+        subscribe(&[EventType::PaneUpdate, EventType::TabUpdate, EventType::ListClients]);
+        let ids = get_plugin_ids();
+        self.own_plugin_id = Some(ids.plugin_id);
+        self.own_client_id = Some(ids.client_id);
+        list_clients();
     }
 
     fn update(&mut self, event: Event) -> bool {
         match event {
-            Event::PaneUpdate(manifest) => self.panes = manifest,
-            Event::TabUpdate(tabs) => self.tabs = tabs,
+            Event::PaneUpdate(manifest) => {
+                self.panes = manifest;
+                list_clients(); // a client attaching or leaving shows up as a pane update
+            }
+            Event::TabUpdate(tabs) => {
+                self.tabs = tabs;
+                list_clients();
+            }
+            Event::ListClients(clients) => self.clients = clients,
             _ => {}
         }
         // The keypress that launched this instance, replayed now that the state exists.
-        if self.pending.is_some() && !self.panes.panes.is_empty() && !self.tabs.is_empty() {
+        if self.pending.is_some() && self.ready() {
             if let Some((action, dir)) = self.pending.take() {
                 self.act(&action, dir);
             }
@@ -129,7 +150,7 @@ impl ZellijPlugin for State {
             .as_deref()
             .and_then(|p| p.parse::<Direction>().ok());
         if let Some(dir) = dir {
-            if self.panes.panes.is_empty() || self.tabs.is_empty() {
+            if !self.ready() {
                 // Cold start: this very pipe launched the plugin. Keep the key for the state.
                 self.pending = Some((action.to_string(), dir));
             } else {
@@ -141,6 +162,20 @@ impl ZellijPlugin for State {
 }
 
 impl State {
+    /// Everything `act` reads has arrived.
+    fn ready(&self) -> bool {
+        !self.panes.panes.is_empty() && !self.tabs.is_empty() && !self.clients.is_empty()
+    }
+
+    /// Zellij runs one instance per attached client and pipes every keypress to each of them,
+    /// without saying which client pressed. Two terminals on one session therefore forwarded each
+    /// key twice (measured: two `\n` 1.3 ms apart), so one `<C-j>` moved two steps. Only the
+    /// instance of the lowest client id answers.
+    fn is_responder(&self) -> bool {
+        let lowest = self.clients.iter().map(|c| c.client_id).min();
+        lowest.is_none() || lowest == self.own_client_id
+    }
+
     /// The tab this instance is EMBEDDED in as a tiled layout pane — None for the intended
     /// BACKGROUND instance. (A background plugin still appears in the manifest — `load_plugins`
     /// lists it as suppressed, a pipe-launch as floating — so "in no tab" alone is not the test:
@@ -158,11 +193,19 @@ impl State {
         None
     }
 
-    /// The focused pane of the ACTIVE tab, in the layer the user actually sees (a visible
-    /// floating layer covers the tiled one).
+    /// The focused pane of the ACTIVE tab. Zellij is asked outright, because the manifest's
+    /// `is_focused` can hold for several panes of one tab: with a Neovim pane below a shell, the
+    /// shell could still be flagged, it came first, and the key moved the zellij focus instead of
+    /// reaching Neovim. The flag is only the fallback, in the layer the user actually sees (a
+    /// visible floating layer covers the tiled one).
     fn focused_pane(&self) -> Option<(&TabInfo, &PaneInfo)> {
         let tab = self.tabs.iter().find(|t| t.active)?;
         let panes = self.panes.panes.get(&tab.position)?;
+        if let Ok((_, id)) = get_focused_pane_info() {
+            if let Some(pane) = pane_by_id(panes, id) {
+                return Some((tab, pane));
+            }
+        }
         let floating = tab.are_floating_panes_visible;
         let pane = panes
             .iter()
@@ -172,6 +215,9 @@ impl State {
 
     /// One nav keypress: forward it into Neovim's pane, or move / resize the zellij pane.
     fn act(&self, action: &str, dir: Direction) {
+        if !self.is_responder() {
+            return;
+        }
         let Some((tab, pane)) = self.focused_pane() else {
             return;
         };
