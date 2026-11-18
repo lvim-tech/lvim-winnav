@@ -56,7 +56,7 @@ local function check_multiplexer(health)
     health.ok(("binary reachable: %s"):format(config.multiplexer.commands[backend.name]))
 
     for what, cmd in pairs(backend.commands()) do
-        health.info(("%-6s ➤ %s"):format(what, cmd))
+        health.info(("%-6s 󰅂 %s"):format(what, cmd))
     end
 
     if config.multiplexer.mark_pane then
@@ -127,11 +127,11 @@ function M.check()
     for _, dir in ipairs(DIRS) do
         per[#per + 1] = ("%s=%s"):format(dir, nav.edge_behaviour(dir))
     end
-    health.info("at_edge ➤ " .. table.concat(per, "  "))
+    health.info("at_edge 󰅂 " .. table.concat(per, "  "))
 
     local step = config.default_amount
     health.info(
-        ("resize step ➤ %s (%d cells horizontally, %d vertically at this size)"):format(
+        ("resize step 󰅂 %s (%d cells horizontally, %d vertically at this size)"):format(
             tostring(step),
             amount.resolve(step, "horizontal"),
             amount.resolve(step, "vertical")

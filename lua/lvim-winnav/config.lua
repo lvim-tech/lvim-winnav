@@ -21,7 +21,7 @@
 ---@field hint_key   LvimWinNavColor  Resize-mode hint bar: the key badge box
 ---@field hint_label LvimWinNavColor  Resize-mode hint bar: the label box next to a key badge
 ---@field hint_size  LvimWinNavColor  Resize-mode hint bar: the live window-size cell
----@field hint_sep   LvimWinNavColor  Resize-mode hint bar: the ➤ separator box
+---@field hint_sep   LvimWinNavColor  Resize-mode hint bar: the 󰅂 separator box
 ---@field hint_fill  LvimWinNavColor  Resize-mode hint bar: the continuous strip under the row
 
 ---@class LvimWinNavIcons
@@ -168,10 +168,10 @@ return {
     ignored_filetypes = {},
     ignored_buftypes = {},
 
-    -- Nerd Font glyphs (single width) + the canonical `➤` pointer.
+    -- Nerd Font glyphs (single width) + the canonical `󰅂` pointer.
     icons = {
         mode = "󰩨",
-        separator = "➤",
+        separator = "󰅂",
         mux = "󰆍",
     },
 

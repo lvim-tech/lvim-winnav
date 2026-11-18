@@ -59,7 +59,7 @@ function M.build()
         LvimWinNavHintKey = box(col.hint_key, tints, true), -- the ` h ` key badge
         LvimWinNavHintLabel = box(col.hint_label, tints), -- its ` left ` label box
         LvimWinNavHintSize = box(col.hint_size, tints, true), -- the live `80 x 24` cell
-        LvimWinNavHintSep = box(col.hint_sep, tints), -- the ➤ separator box
+        LvimWinNavHintSep = box(col.hint_sep, tints), -- the 󰅂 separator box
         LvimWinNavHintFill = box(col.hint_fill, tints), -- the strip under the whole row
     }
 end

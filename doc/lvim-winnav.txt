@@ -134,7 +134,7 @@ the live config): >lua
         ignored_filetypes = {},
         ignored_buftypes = {},
 
-        icons = { mode = "󰩨", separator = "➤", mux = "󰆍" },
+        icons = { mode = "󰩨", separator = "󰅂", mux = "󰆍" },
 
         colors = {
             hint_key = { accent = "blue", tint = "badge" },

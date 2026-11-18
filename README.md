@@ -280,10 +280,10 @@ require("lvim-winnav").setup({
     ignored_filetypes = {},
     ignored_buftypes = {},
 
-    -- Nerd Font glyphs (single width) + the canonical `➤` pointer.
+    -- Nerd Font glyphs (single width) + the canonical `󰅂` pointer.
     icons = {
         mode = "󰩨",
-        separator = "➤",
+        separator = "󰅂",
         mux = "󰆍",
     },
 

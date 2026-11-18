@@ -123,7 +123,7 @@ end
 
 -- ── interactive resize mode ──────────────────────────────────────────────────
 
---- The hint-bar records for the mode: a key badge per direction, the `➤` pointer, the live window size.
+--- The hint-bar records for the mode: a key badge per direction, the `󰅂` pointer, the live window size.
 ---@return table[] items
 local function hint_items()
     local rm = config.resize_mode
