@@ -132,6 +132,16 @@ local function register_pane_mark()
     if not config.multiplexer.mark_pane then
         return
     end
+    -- Only a Neovim that DRAWS in the pane is that pane's Neovim. An embedded one (`--embed`: a finder's
+    -- preview, a GUI) or a headless one (`--headless`: scripts, tests) inherits the pane's environment
+    -- ($ZELLIJ_PANE_ID / $TMUX_PANE) but not its terminal: marking from there labelled a SHELL pane as
+    -- Neovim — the nav keys were then forwarded into the shell instead of moving the pane — and the mark
+    -- outlived it whenever it was killed rather than quit (no VimLeavePre).
+    for _, a in ipairs(vim.v.argv) do
+        if a == "--embed" or a == "--headless" then
+            return
+        end
+    end
     local group = api.nvim_create_augroup("LvimWinNavPaneMark", { clear = true })
     api.nvim_create_autocmd({ "VimEnter", "VimResume" }, {
         group = group,
