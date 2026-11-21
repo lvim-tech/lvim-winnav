@@ -227,6 +227,26 @@ local function bind_keys()
             M.resize(dir)
         end, { desc = "Resize " .. dir, silent = true })
     end
+    -- the move keys in TERMINAL mode too (see lvim-winnav.term): a window running a terminal program is left with
+    -- them, unless that program keeps them for itself
+    local tcfg = config.terminal
+    if tcfg and tcfg.enabled then
+        local term = require("lvim-winnav.term")
+        for dir, lhs in pairs(keys.move or {}) do
+            vim.keymap.set("t", lhs, function()
+                local buf = api.nvim_get_current_buf()
+                if term.passthrough(buf, tcfg.passthrough) then
+                    local job = vim.b[buf].terminal_job_id
+                    if job then
+                        api.nvim_chan_send(job, vim.keycode(lhs))
+                    end
+                    return
+                end
+                vim.cmd("stopinsert")
+                M.move(dir)
+            end, { desc = "Window " .. dir .. " (from a terminal)", silent = true })
+        end
+    end
 end
 
 --- Merge user options into the live config, bind the highlights, register `:LvimWinNav` and the pane mark.

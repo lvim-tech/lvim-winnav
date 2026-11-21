@@ -322,3 +322,10 @@ nothing that way); nothing is ever guessed.
     • which optional integrations are present (lvim-winmove, lvim-msgarea)
 
 vim:tw=78:ts=8:ft=help:norl:
+
+TERMINAL BUFFERS                                                  *lvim-winnav-terminal*
+
+The move keys are bound in terminal mode too (`config.terminal.enabled`, default true), so a window that runs a
+terminal program - a Claude Code session, a shell - is left with the same <C-h/j/k/l>. A program that uses those keys
+itself keeps them while it is the terminal's foreground process: `config.terminal.passthrough` lists them by name
+(lvim-fuzzy, lfz, lvim-commander, lvc, fzf, lazygit, vim, nvim, tmux, zellij). `terminal = { enabled = false }` is the old behaviour.

@@ -69,6 +69,9 @@
 ---   The plugin's own normal-mode maps, bound at setup(): `move` focuses the window in that
 ---   direction (with the edge behaviour `at_edge` describes) and `resize` grows/shrinks by
 ---   `default_amount`. `false` binds nothing — for a host that maps the API itself
+---@field terminal                          { enabled: boolean, passthrough: string[] }
+---   The move keys in TERMINAL mode too (a window running a terminal program can be left with them);
+---   `passthrough`: programs (by name) that keep the keys for themselves while they are in the foreground
 ---@field at_edge                            LvimWinNavEdge|table<LvimWinNavDir, LvimWinNavEdge>
 ---@field default_amount                     integer|string  Resize step: cells, or a percentage of the parent ("5%")
 ---@field move_cursor_with_buffer            boolean         A swap takes the cursor along into the moved buffer
@@ -106,6 +109,15 @@ return {
     keys = {
         move = { left = "<C-h>", down = "<C-j>", up = "<C-k>", right = "<C-l>" },
         resize = { left = "<C-Left>", down = "<C-Down>", up = "<C-Up>", right = "<C-Right>" },
+    },
+
+    -- TERMINAL buffers: the move keys are bound in terminal mode as well, so a window that runs a terminal program
+    -- (a Claude Code session, a shell) is left with the same <C-h/j/k/l>. A program that uses those keys itself
+    -- keeps them while it is the terminal's foreground process, by NAME (`passthrough`): a finder moves its
+    -- selection with them, lazygit and a nested Neovim have their own windows. `enabled = false` = as before.
+    terminal = {
+        enabled = true,
+        passthrough = { "lvim-fuzzy", "lfz", "lvim-commander", "lvc", "fzf", "lazygit", "vim", "nvim", "tmux", "zellij" },
     },
 
     -- A directional swap moves the buffer; `true` moves the cursor with it (you follow your buffer).
