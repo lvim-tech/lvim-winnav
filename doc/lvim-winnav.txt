@@ -328,4 +328,4 @@ TERMINAL BUFFERS                                                  *lvim-winnav-t
 The move keys are bound in terminal mode too (`config.terminal.enabled`, default true), so a window that runs a
 terminal program - a Claude Code session, a shell - is left with the same <C-h/j/k/l>. A program that uses those keys
 itself keeps them while it is the terminal's foreground process: `config.terminal.passthrough` lists them by name
-(lvim-fuzzy, lfz, lvim-commander, lvc, fzf, lazygit, vim, nvim, tmux, zellij). `terminal = { enabled = false }` is the old behaviour.
+(lvim-fuzzy-cli, lvim-fuzzy-commander, fzf, lazygit, vim, nvim, tmux, zellij). `terminal = { enabled = false }` is the old behaviour.
