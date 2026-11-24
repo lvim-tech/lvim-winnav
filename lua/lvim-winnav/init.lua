@@ -132,21 +132,59 @@ local function register_pane_mark()
     if not config.multiplexer.mark_pane then
         return
     end
-    -- Only a Neovim that DRAWS in the pane is that pane's Neovim. An embedded one (`--embed`: a finder's
-    -- preview, a GUI) or a headless one (`--headless`: scripts, tests) inherits the pane's environment
-    -- ($ZELLIJ_PANE_ID / $TMUX_PANE) but not its terminal: marking from there labelled a SHELL pane as
-    -- Neovim — the nav keys were then forwarded into the shell instead of moving the pane — and the mark
-    -- outlived it whenever it was killed rather than quit (no VimLeavePre).
-    for _, a in ipairs(vim.v.argv) do
-        if a == "--embed" or a == "--headless" then
-            return
+    -- Only a Neovim that DRAWS in the pane is that pane's Neovim. A headless one (`--headless`: scripts, tests) and an
+    -- embedded one whose UI is not a terminal (`--embed` driven by a finder's preview or a GUI) inherit the pane's
+    -- environment ($ZELLIJ_PANE_ID / $TMUX_PANE) but not its terminal: marking from there labelled a SHELL pane as
+    -- Neovim — the nav keys were then forwarded into the shell instead of moving the pane — and the mark outlived
+    -- it whenever it was killed rather than quit (no VimLeavePre).
+    --
+    -- BUT the process that runs your config in a plain terminal IS `nvim --embed`: the TUI is a client of it
+    -- (`nvim` starts that core and attaches its terminal UI). What tells the two apart is the attached UI: a TUI
+    -- reports `stdout_tty`, a preview's or a GUI's client does not.
+    local function draws_in_pane()
+        local embedded = false
+        for _, a in ipairs(vim.v.argv) do
+            if a == "--headless" then
+                return false
+            end
+            if a == "--embed" then
+                embedded = true
+            end
         end
+        if not embedded then
+            return true
+        end
+        local tty = false
+        for _, ui in ipairs(api.nvim_list_uis()) do
+            tty = tty or ui.stdout_tty == true
+        end
+        if not tty then
+            return false
+        end
+        -- Another program that drives an `nvim --embed` of its own (an assistant's editor, a GUI) may report a terminal
+        -- too. The core of the pane's Neovim is the CHILD of that Neovim's own TUI: the parent process must be an
+        -- `nvim` (where /proc cannot tell, the UI alone decides).
+        local ok, ppid = pcall(vim.uv.os_getppid)
+        if ok and ppid then
+            local f = io.open("/proc/" .. ppid .. "/cmdline", "rb")
+            if f then
+                local cmd = f:read("*a") or ""
+                f:close()
+                local exe = cmd:match("^[^%z]+")
+                if exe then
+                    return vim.fs.basename(exe) == vim.fs.basename(vim.v.progpath)
+                end
+            end
+        end
+        return true
     end
     local group = api.nvim_create_augroup("LvimWinNavPaneMark", { clear = true })
     api.nvim_create_autocmd({ "VimEnter", "VimResume" }, {
         group = group,
         callback = function()
-            mux.mark(true)
+            if draws_in_pane() then
+                mux.mark(true)
+            end
         end,
     })
     api.nvim_create_autocmd({ "VimLeavePre", "VimSuspend" }, {
@@ -156,7 +194,7 @@ local function register_pane_mark()
         end,
     })
     -- setup() may run long after VimEnter (a lazily loaded plugin): mark right now as well.
-    if vim.v.vim_did_enter == 1 then
+    if vim.v.vim_did_enter == 1 and draws_in_pane() then
         mux.mark(true)
     end
 end
