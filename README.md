@@ -175,6 +175,10 @@ VimLeave, so the plugin tests the focused pane's **title** — a lookup, not a p
 under a wrapper / sudo / ssh / a renamed binary. A plain `nvim` title / command also counts (Zellij titles a
 pane after its running command by default), so Neovim without the mark still forwards.
 
+A pane whose program is `lfz` or `lvc` (the lvim-fuzzy finder and commander) gets the **move** keys
+(`<C-h/j/k/l>`) forwarded too — they use them themselves (a list, panels, the tab and button bars) — while
+the resize keys stay Zellij's.
+
 Install — one command, run once (the tpm analogue; Zellij has no hook that runs anything out of a repo):
 
 ```sh

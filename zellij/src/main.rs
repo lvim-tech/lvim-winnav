@@ -79,6 +79,27 @@ fn is_nvim(pane: &PaneInfo) -> bool {
     pane.terminal_command.as_deref().and_then(command_word).as_deref() == Some("nvim")
 }
 
+/// Programs that use <C-h/j/k/l> themselves (a finder moves its selection, a file commander its panels and bars) while they
+/// are the pane's program: the move keys are forwarded to them, the resize keys stay zellij's. By the first word of the
+/// pane's title (zellij titles a pane after its running command) or of its command.
+const KEEPS_MOVE: [&str; 4] = ["lfz", "lvc", "lvim-fuzzy-cli", "lvim-fuzzy-commander"];
+
+fn keeps_move(pane: &PaneInfo) -> bool {
+    if pane.is_plugin {
+        return false;
+    }
+    let is = |w: Option<String>| w.is_some_and(|w| KEEPS_MOVE.contains(&w.as_str()));
+    if is(command_word(&pane.title)) || is(pane.terminal_command.as_deref().and_then(command_word)) {
+        return true;
+    }
+    // A shell's pane is titled `Pane #N` and has no launch command: what runs in it NOW is what Zellij's own
+    // process tracking says (`dump-layout` shows it as the pane's `command`).
+    match get_pane_running_command(PaneId::Terminal(pane.id)) {
+        Ok(args) => is(args.first().map(String::as_str).and_then(command_word)),
+        Err(_) => false,
+    }
+}
+
 /// The pane a `PaneId` names: terminal and plugin panes number separately.
 fn pane_by_id(panes: &[PaneInfo], id: PaneId) -> Option<&PaneInfo> {
     let (wanted, plugin) = match id {
@@ -230,6 +251,13 @@ impl State {
             }
         }
         if is_nvim(pane) {
+            if let Some(chars) = chars_for(action, dir) {
+                write_chars_to_pane_id(chars, PaneId::Terminal(pane.id));
+            }
+            return;
+        }
+        // lfz / lvc keep the move keys (the resize keys remain zellij's)
+        if action == "move" && keeps_move(pane) {
             if let Some(chars) = chars_for(action, dir) {
                 write_chars_to_pane_id(chars, PaneId::Terminal(pane.id));
             }

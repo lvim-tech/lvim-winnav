@@ -117,7 +117,20 @@ return {
     -- selection with them, lazygit and a nested Neovim have their own windows. `enabled = false` = as before.
     terminal = {
         enabled = true,
-        passthrough = { "lvim-fuzzy-cli", "lvim-fuzzy-commander", "fzf", "lazygit", "vim", "nvim", "tmux", "zellij" },
+        -- (the process name is the name it was STARTED by: `lfz` / `lvc` are links to the two lvim-fuzzy programs, and
+        -- the links are what a shell runs)
+        passthrough = {
+            "lvim-fuzzy-cli",
+            "lfz",
+            "lvim-fuzzy-commander",
+            "lvc",
+            "fzf",
+            "lazygit",
+            "vim",
+            "nvim",
+            "tmux",
+            "zellij",
+        },
     },
 
     -- A directional swap moves the buffer; `true` moves the cursor with it (you follow your buffer).
